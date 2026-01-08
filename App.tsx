@@ -30,7 +30,6 @@ const App: React.FC = () => {
       const res = await (authMode === 'login' ? loginUser(formData.user, formData.pass) : registerUser(formData.user, formData.pass));
       if (res.status === 'success') {
         if (authMode === 'login') {
-          // Gán API Key từ Backend vào bộ nhớ Runtime Service
           if (res.apiKey) {
             setRuntimeApiKey(res.apiKey);
           }
@@ -115,6 +114,42 @@ const App: React.FC = () => {
     }
   };
 
+  const handleHomeClick = () => {
+    setState(prev => ({
+      ...prev,
+      originalImage: null,
+      results: [],
+      sku: '',
+      etsyMetadata: null,
+      productDescription: '',
+      error: null
+    }));
+    setLastSavedRowIndex(null);
+    setShowHistory(false);
+  };
+
+  const handleSelectFromHistory = (item: HistoryItem) => {
+    setState(prev => ({
+      ...prev,
+      originalImage: item.originalImage,
+      sku: item.sku === 'N/A' ? '' : item.sku,
+      results: item.results.map((url, i) => ({
+        id: `archived-${i}`,
+        url,
+        type: i === 0 ? 'full' : (i < 4 ? 'people' : 'construction'),
+        description: 'Archived design'
+      })),
+      etsyMetadata: {
+        title: item.etsyTitle,
+        description: item.etsyDescription,
+        tags: item.tags,
+        materials: item.materials
+      }
+    }));
+    setLastSavedRowIndex(item.rowIndex);
+    setShowHistory(false); // Quay lại giao diện Design
+  };
+
   const downloadFinal = async (url: string, name: string) => {
     try {
       if (url.startsWith('data:')) {
@@ -126,8 +161,6 @@ const App: React.FC = () => {
         document.body.removeChild(link);
         return;
       }
-
-      // Xử lý tải ảnh từ URL proxy (lh3.googleusercontent.com) bằng cách fetch blob
       const response = await fetch(url, { mode: 'cors' });
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -139,7 +172,6 @@ const App: React.FC = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      console.warn("Download failed, opening in new tab", error);
       const link = document.createElement('a');
       link.href = url;
       link.download = `${name}.png`;
@@ -230,11 +262,24 @@ const App: React.FC = () => {
         <>
           <header className="p-6 bg-black/80 backdrop-blur-2xl border-b border-white/5 flex justify-between items-center sticky top-0 z-50">
             <div className="flex items-center gap-6">
-              <div className="w-12 h-12 bg-amber-600 rounded-2xl flex items-center justify-center shadow-lg text-black cursor-pointer hover:scale-105 transition-all" onClick={() => setShowHistory(false)}><i className="fas fa-cubes text-xl"></i></div>
-              <h1 className="text-xl font-serif font-bold hidden md:block">WoodVision <span className="text-amber-500 text-[9px] uppercase font-black tracking-widest ml-2">Advanced Studio</span></h1>
-              <button onClick={() => setShowHistory(!showHistory)} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase border transition-all ${showHistory ? 'bg-amber-600 text-black border-amber-600 shadow-lg shadow-amber-600/20' : 'bg-white/5 border-white/10 text-white/40 hover:text-white'}`}>
-                {showHistory ? 'Trở lại Design' : 'Lịch sử thiết kế'}
-              </button>
+              {/* Logo Icon làm nút Home - Tự refresh để bắt đầu thiết kế mới */}
+              <div 
+                onClick={handleHomeClick}
+                className="w-12 h-12 bg-amber-600 rounded-2xl flex items-center justify-center shadow-lg text-black cursor-pointer hover:scale-105 transition-all"
+              >
+                <i className="fas fa-cubes text-xl"></i>
+              </div>
+              <h1 
+                onClick={handleHomeClick}
+                className="text-xl font-serif font-bold hidden md:block cursor-pointer"
+              >
+                WoodVision <span className="text-amber-500 text-[9px] uppercase font-black tracking-widest ml-2">Advanced Studio</span>
+              </h1>
+              <div className="flex gap-2">
+                <button onClick={() => setShowHistory(!showHistory)} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase border transition-all ${showHistory ? 'bg-amber-600 text-black border-amber-600 shadow-lg shadow-amber-600/20' : 'bg-white/5 border-white/10 text-white/40 hover:text-white'}`}>
+                  {showHistory ? 'Trở lại Design' : 'Lịch sử thiết kế'}
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="px-5 py-2 bg-white/5 rounded-full border border-white/5">
@@ -248,7 +293,17 @@ const App: React.FC = () => {
             {showHistory ? (
               <div className="space-y-12 animate-in fade-in duration-500">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-10">
-                  <h2 className="text-6xl font-serif font-bold">Archives <span className="text-amber-600">.</span></h2>
+                  <div className="flex items-center gap-6">
+                    <h2 className="text-6xl font-serif font-bold">Archives <span className="text-amber-600">.</span></h2>
+                    {/* Nút refresh lịch sử (refes) */}
+                    <button 
+                      onClick={loadHistory} 
+                      disabled={isHistoryLoading}
+                      className="w-12 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:text-amber-500 transition-all active:scale-95"
+                    >
+                      <i className={`fas fa-sync ${isHistoryLoading ? 'animate-spin text-amber-500' : ''}`}></i>
+                    </button>
+                  </div>
                   <div className="relative">
                     <i className="fas fa-search absolute left-6 top-1/2 -translate-y-1/2 text-white/20"></i>
                     <input value={historySearch} onChange={e => setHistorySearch(e.target.value)} placeholder="Tìm kiếm theo SKU ID..." className="bg-white/5 border border-white/10 pl-14 pr-8 py-4 rounded-2xl outline-none focus:border-amber-600 text-sm min-w-[350px] transition-all" />
@@ -261,7 +316,7 @@ const App: React.FC = () => {
                         <div className="aspect-square rounded-[40px] overflow-hidden border border-white/10 bg-black group-hover:border-white/20 transition-all relative">
                           <img src={item.originalImage} crossOrigin="anonymous" className="w-full h-full object-contain" alt="Original" />
                           <button 
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadFinal(item.originalImage, `Original-${item.sku}`); }}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); downloadFinal(item.originalImage, `Original-${item.sku}`); }}
                             className="absolute bottom-4 right-4 w-10 h-10 bg-black/60 backdrop-blur-md rounded-xl flex items-center justify-center text-amber-500 hover:bg-amber-600 hover:text-black transition-all shadow-xl"
                           >
                             <i className="fas fa-download"></i>
@@ -270,6 +325,13 @@ const App: React.FC = () => {
                         <div className="px-4">
                           <div className="flex items-center justify-between mb-2">
                              <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">SKU: {item.sku}</span>
+                             {/* Bấm vào mẫu thiết kế để quay lại Design cập nhật SKU */}
+                             <button 
+                               onClick={() => handleSelectFromHistory(item)}
+                               className="px-4 py-2 bg-amber-600/10 hover:bg-amber-600 text-amber-500 hover:text-black rounded-full text-[9px] font-black uppercase transition-all"
+                             >
+                               <i className="fas fa-edit mr-1"></i> CHỌN THIẾT KẾ
+                             </button>
                           </div>
                           <h4 className="font-bold text-sm leading-relaxed">{item.etsyTitle}</h4>
                           <p className="text-white/20 text-[10px] uppercase mt-4 flex items-center gap-2"><i className="fas fa-calendar-alt"></i> {item.time}</p>
@@ -301,13 +363,26 @@ const App: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                  {historyItems.length === 0 && (
+                    <div className="text-center py-40 border-2 border-dashed border-white/5 rounded-[64px] flex flex-col items-center justify-center space-y-6">
+                       <i className="fas fa-box-open text-6xl text-white/5"></i>
+                       <p className="text-[10px] uppercase font-black tracking-[0.5em] text-white/10">No archives found</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="grid lg:grid-cols-12 gap-16">
                 <div className="lg:col-span-4 space-y-10">
                   <section className="bg-white/5 border border-white/10 rounded-[64px] p-12 space-y-10 sticky top-36 shadow-2xl animate-in slide-in-from-left-12 duration-700">
-                    <h2 className="text-3xl font-serif font-bold">New Project</h2>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-3xl font-serif font-bold">New Project</h2>
+                      {state.originalImage && (
+                        <button onClick={handleHomeClick} className="text-[9px] font-black uppercase text-amber-500 hover:text-amber-400 transition-all">
+                          <i className="fas fa-plus mr-2"></i> RESET NEW
+                        </button>
+                      )}
+                    </div>
                     <div onDrop={e => { e.preventDefault(); processFile(e.dataTransfer.files[0]); }} onDragOver={e => e.preventDefault()} className="relative aspect-square rounded-[48px] border-2 border-dashed border-white/10 bg-black flex items-center justify-center cursor-pointer group transition-all hover:border-amber-600/40 overflow-hidden shadow-inner">
                       <input type="file" id="up" className="hidden" onChange={e => e.target.files && processFile(e.target.files[0])} />
                       <label htmlFor="up" className="w-full h-full flex flex-col items-center justify-center text-center p-10 z-10">
@@ -333,7 +408,10 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="space-y-4">
-                      <label className="text-[10px] font-black uppercase text-white/40 px-2 tracking-widest">SKU / Project ID</label>
+                      <div className="flex items-center justify-between px-2">
+                        <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">SKU / Project ID</label>
+                        {lastSavedRowIndex && <span className="text-[8px] font-black uppercase text-amber-500 bg-amber-600/10 px-2 py-0.5 rounded">Row: #{lastSavedRowIndex}</span>}
+                      </div>
                       <div className="relative flex gap-3">
                         <input value={state.sku} onChange={e => setState({...state, sku: e.target.value})} placeholder="Vd: WOOD-PRO-77" className="flex-1 bg-black/60 border border-white/10 px-6 py-5 rounded-3xl outline-none focus:border-amber-600 text-sm transition-all" />
                         <button 
@@ -341,10 +419,15 @@ const App: React.FC = () => {
                             e.stopPropagation();
                             if (!lastSavedRowIndex) return;
                             setIsSavingSku(true);
-                            try { await updateSkuManually(lastSavedRowIndex, state.sku); loadHistory(); alert("Đã cập nhật SKU thành công!"); } catch(e){} finally { setIsSavingSku(false); }
+                            try { 
+                              await updateSkuManually(lastSavedRowIndex, state.sku); 
+                              loadHistory(); 
+                              alert("Đã cập nhật SKU thành công!"); 
+                            } catch(e){} finally { setIsSavingSku(false); }
                           }} 
                           disabled={!lastSavedRowIndex || isSavingSku} 
                           className="w-16 bg-white/5 hover:bg-amber-600 hover:text-black rounded-3xl flex items-center justify-center transition-all disabled:opacity-20 shadow-lg active:scale-95"
+                          title="Lưu SKU thủ công"
                         >
                           {isSavingSku ? <i className="fas fa-sync animate-spin"></i> : <i className="fas fa-save"></i>}
                         </button>
@@ -414,6 +497,12 @@ const App: React.FC = () => {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {!state.originalImage && (
+                    <div className="aspect-video flex flex-col items-center justify-center text-white/5 border-2 border-dashed border-white/5 rounded-[80px]">
+                       <i className="fas fa-image text-8xl mb-8"></i>
+                       <p className="text-[10px] uppercase font-black tracking-[0.8em]">Architectural Studio Idle</p>
                     </div>
                   )}
                 </div>
