@@ -1,6 +1,6 @@
 
 /**
- * GOOGLE APPS SCRIPT BACKEND V21 - TEAM3T (WOODVISION)
+ * GOOGLE APPS SCRIPT BACKEND V21.1 - TEAM3T (WOODVISION)
  * CẬP NHẬT: TỐI ƯU HÓA LẤY KEY VÀ HISTORY LINKS
  */
 
@@ -130,10 +130,12 @@ function getApiKey(ss) {
   var allKeys = [];
   // Bắt đầu từ hàng 2 để bỏ qua Header
   for (var i = 1; i < data.length; i++) {
-    var cellValue = data[i][1].toString();
-    // Tách các key nếu chúng nằm chung 1 ô (phân cách bởi phẩy hoặc xuống hàng)
-    var keys = cellValue.split(/[\n,\r\s,]+/).map(function(k) { return k.trim(); }).filter(Boolean);
-    allKeys = allKeys.concat(keys);
+    if (data[i][1]) {
+      var cellValue = data[i][1].toString();
+      // Tách các key nếu chúng nằm chung 1 ô (phân cách bởi phẩy hoặc xuống hàng)
+      var keys = cellValue.split(/[\n,\r\s,]+/).map(function(k) { return k.trim(); }).filter(Boolean);
+      allKeys = allKeys.concat(keys);
+    }
   }
   // Chọn 1 key ngẫu nhiên để xoay tua
   return allKeys.length ? allKeys[Math.floor(Math.random() * allKeys.length)] : "";

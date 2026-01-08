@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppState, GeneratedImage, HistoryItem } from './types';
-import { analyzeProductImage, generateScene, generateEtsyMetadata } from './services/geminiService';
+import { analyzeProductImage, generateScene, generateEtsyMetadata, setRuntimeApiKey } from './services/geminiService';
 import { loginUser, registerUser, logToSheet, fetchHistory, updateSkuManually } from './services/storageService';
 
 const App: React.FC = () => {
@@ -30,13 +30,11 @@ const App: React.FC = () => {
       const res = await (authMode === 'login' ? loginUser(formData.user, formData.pass) : registerUser(formData.user, formData.pass));
       if (res.status === 'success') {
         if (authMode === 'login') {
-          // Gán API Key từ Backend vào môi trường runtime
+          // Gán API Key từ Backend vào bộ nhớ Runtime Service
           if (res.apiKey) {
-            (window as any).process = (window as any).process || { env: {} };
-            (window as any).process.env = (window as any).process.env || {};
-            (window as any).process.env.API_KEY = res.apiKey;
+            setRuntimeApiKey(res.apiKey);
           }
-          setState(prev => ({ ...prev, user: { username: formData.user, role: res.role } }));
+          setState(prev => ({ ...prev, user: { username: formData.user, role: res.role }, error: null }));
         } else {
           alert(res.message);
           setAuthMode('login');
@@ -78,12 +76,10 @@ const App: React.FC = () => {
       const desc = await analyzeProductImage(state.originalImage);
       setState(prev => ({ ...prev, productDescription: desc, isAnalyzing: false, isGenerating: true, isGeneratingMetadata: true }));
 
-      // GIAI ĐOẠN 1: Tạo Master Design
       const masterUrl = await generateScene(state.originalImage, desc, 'full', 'Creating the definitive Master Architectural concept (40% soul preservation).', state.environment, true);
       const masterResult: GeneratedImage = { id: 'master', url: masterUrl, type: 'full', description: 'Bản thiết kế Master (Gốc kiến trúc)' };
       setState(prev => ({ ...prev, results: [masterResult] }));
 
-      // GIAI ĐOẠN 2: Dùng Master Design làm gốc cho 8 ảnh còn lại
       const tasks = [
         { type: 'full' as const, context: 'Toàn cảnh khác của công trình master này.' },
         { type: 'people' as const, context: 'Người sử dụng sản phẩm gỗ thật, quay nhiều góc cận cảnh.' },
@@ -131,7 +127,7 @@ const App: React.FC = () => {
         return;
       }
 
-      // Xử lý tải ảnh từ URL ngoại vi (Google Drive proxy)
+      // Xử lý tải ảnh từ URL proxy (lh3.googleusercontent.com) bằng cách fetch blob
       const response = await fetch(url, { mode: 'cors' });
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -143,7 +139,7 @@ const App: React.FC = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      // Fallback nếu CORS chặn fetch trực tiếp
+      console.warn("Download failed, opening in new tab", error);
       const link = document.createElement('a');
       link.href = url;
       link.download = `${name}.png`;
@@ -156,6 +152,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-amber-600 selection:text-black">
+      {/* MODAL CHI TIẾT */}
       {selectedResult && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
           <button onClick={() => { setSelectedResult(null); setRefineNote(''); }} className="absolute top-8 right-8 text-white/40 hover:text-white text-3xl transition-colors"><i className="fas fa-times"></i></button>
@@ -201,7 +198,7 @@ const App: React.FC = () => {
                   >
                     REGENERATE
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); downloadFinal(selectedResult.url, `WoodDesign-${selectedResult.id}`); }} className="bg-white/10 hover:bg-white/20 py-5 rounded-3xl font-black text-xs uppercase transition-all active:scale-95">DOWNLOAD PNG</button>
+                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadFinal(selectedResult.url, `WoodDesign-${selectedResult.id}`); }} className="bg-white/10 hover:bg-white/20 py-5 rounded-3xl font-black text-xs uppercase transition-all active:scale-95">DOWNLOAD PNG</button>
                 </div>
               </div>
             </div>
@@ -264,7 +261,7 @@ const App: React.FC = () => {
                         <div className="aspect-square rounded-[40px] overflow-hidden border border-white/10 bg-black group-hover:border-white/20 transition-all relative">
                           <img src={item.originalImage} crossOrigin="anonymous" className="w-full h-full object-contain" alt="Original" />
                           <button 
-                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); downloadFinal(item.originalImage, `Original-${item.sku}`); }}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadFinal(item.originalImage, `Original-${item.sku}`); }}
                             className="absolute bottom-4 right-4 w-10 h-10 bg-black/60 backdrop-blur-md rounded-xl flex items-center justify-center text-amber-500 hover:bg-amber-600 hover:text-black transition-all shadow-xl"
                           >
                             <i className="fas fa-download"></i>
@@ -285,7 +282,7 @@ const App: React.FC = () => {
                               <img src={url} crossOrigin="anonymous" className="w-full h-full object-cover group-hover/img:scale-110 duration-500 transition-transform" alt="Res" />
                               <div className="absolute top-2 right-2 opacity-0 group-hover/img:opacity-100 transition-opacity z-20">
                                 <button 
-                                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); downloadFinal(url, `Archive-${item.sku}-${rIdx + 1}`); }} 
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadFinal(url, `Archive-${item.sku}-${rIdx + 1}`); }} 
                                   className="w-8 h-8 bg-black/60 backdrop-blur-md rounded-lg flex items-center justify-center text-white hover:bg-amber-600 hover:text-black transition-all shadow-lg"
                                   title="Tải ảnh xuống"
                                 >
@@ -376,7 +373,7 @@ const App: React.FC = () => {
                           <div className="w-20 h-20 bg-amber-600/10 rounded-3xl flex items-center justify-center text-amber-600 shadow-inner border border-amber-600/20"><i className="fas fa-bullseye text-3xl"></i></div>
                           <h3 className="text-5xl font-serif font-bold">SEO Content <span className="text-amber-500 font-sans text-xs align-middle ml-4 bg-amber-600/10 px-4 py-1 rounded-full uppercase tracking-widest">Etsy Market</span></h3>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${state.etsyMetadata?.title}\n\n${state.etsyMetadata?.description}\n\nTags: ${state.etsyMetadata?.tags}`); alert("Đã sao chép nội dung SEO!"); }} className="bg-amber-600 text-black px-12 py-5 rounded-[28px] text-[10px] font-black uppercase hover:bg-amber-500 transition-all shadow-xl active:scale-95">Copy Full Listing</button>
+                        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard.writeText(`${state.etsyMetadata?.title}\n\n${state.etsyMetadata?.description}\n\nTags: ${state.etsyMetadata?.tags}`); alert("Đã sao chép nội dung SEO!"); }} className="bg-amber-600 text-black px-12 py-5 rounded-[28px] text-[10px] font-black uppercase hover:bg-amber-500 transition-all shadow-xl active:scale-95">Copy Full Listing</button>
                       </div>
                       <div className="grid gap-16 relative z-10">
                         <div className="space-y-6">
@@ -413,7 +410,7 @@ const App: React.FC = () => {
                               <span className="font-black text-[10px] uppercase text-white/20 tracking-[0.3em]">Design Phase</span>
                               <p className="text-[11px] font-bold text-white/60">Image 0{i+1}</p>
                             </div>
-                            <button onClick={e => { e.stopPropagation(); e.preventDefault(); downloadFinal(res.url, `WoodVision-Design-${i+1}`); }} className="w-14 h-14 bg-white/5 hover:bg-amber-600 hover:text-black rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-lg"><i className="fas fa-arrow-down"></i></button>
+                            <button onClick={e => { e.preventDefault(); e.stopPropagation(); downloadFinal(res.url, `WoodVision-Design-${i+1}`); }} className="w-14 h-14 bg-white/5 hover:bg-amber-600 hover:text-black rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-lg"><i className="fas fa-arrow-down"></i></button>
                           </div>
                         </div>
                       ))}

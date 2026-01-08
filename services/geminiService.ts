@@ -1,9 +1,23 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
+let runtimeApiKey: string | null = null;
+
+/**
+ * Cập nhật API Key từ Backend vào bộ nhớ ứng dụng
+ */
+export const setRuntimeApiKey = (key: string) => {
+  runtimeApiKey = key;
+};
+
 const getAIClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key chưa được cấu hình. Vui lòng đăng nhập lại.");
+  // Ưu tiên lấy key được set tại runtime (từ Google Sheet), sau đó mới tới biến môi trường
+  const apiKey = runtimeApiKey || (typeof process !== 'undefined' ? process.env.API_KEY : null);
+  
+  if (!apiKey) {
+    throw new Error("API KEY CHƯA ĐƯỢC CẤU HÌNH. VUI LÒNG ĐĂNG NHẬP LẠI.");
+  }
+  
   return new GoogleGenAI({ apiKey });
 };
 
