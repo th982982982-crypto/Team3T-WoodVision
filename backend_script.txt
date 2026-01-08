@@ -1,0 +1,142 @@
+
+/**
+ * GOOGLE APPS SCRIPT BACKEND V3.1 - WOODVISION AI (ROBUST KEY HANDLING)
+ */
+
+function doPost(e) {
+  var action = "";
+  try {
+    var data = JSON.parse(e.postData.contents);
+    action = data.action;
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1. HÀNH ĐỘNG: ĐĂNG KÝ
+    if (action === "register") {
+      var userSheet = getOrCreateSheet(ss, "Users", ["Username", "Password", "Role", "Status", "Created"]);
+      var users = userSheet.getDataRange().getValues();
+      for(var i=1; i<users.length; i++) {
+        if(users[i][0] == data.username) return response({ status: "error", message: "Tài khoản này đã tồn tại!" });
+      }
+      userSheet.appendRow([data.username, data.password, "user", "pending", new Date()]);
+      return response({ status: "success", message: "Đăng ký thành công! Vui lòng đợi Admin phê duyệt." });
+    }
+
+    // 2. HÀNH ĐỘNG: ĐĂNG NHẬP (Lấy 1 key ngẫu nhiên từ danh sách)
+    if (action === "login") {
+      var userSheet = getOrCreateSheet(ss, "Users");
+      var users = userSheet.getDataRange().getValues();
+      for (var i = 1; i < users.length; i++) {
+        if (users[i][0] == data.username && users[i][1] == data.password) {
+          if (users[i][2] !== "admin" && users[i][3] !== "approved") {
+            return response({ status: "pending", message: "Tài khoản đang chờ xét duyệt." });
+          }
+          var apiKey = getApiKey(ss); // Lấy key xoay tua
+          if (!apiKey) return response({ status: "error", message: "Hệ thống chưa cấu hình API Key!" });
+          return response({ status: "success", role: users[i][2], apiKey: apiKey });
+        }
+      }
+      return response({ status: "error", message: "Sai tên đăng nhập hoặc mật khẩu!" });
+    }
+
+    // 3. HÀNH ĐỘNG: LẤY DANH SÁCH USER
+    if (action === "getUsers") {
+      var userSheet = getOrCreateSheet(ss, "Users");
+      var users = userSheet.getDataRange().getValues();
+      var userList = [];
+      for (var i = 1; i < users.length; i++) {
+        userList.push({ username: users[i][0], role: users[i][2], status: users[i][3] });
+      }
+      return response({ status: "success", users: userList });
+    }
+
+    // 4. HÀNH ĐỘNG: DUYỆT NGƯỜI DÙNG
+    if (action === "approveUser") {
+      var userSheet = getOrCreateSheet(ss, "Users");
+      var users = userSheet.getDataRange().getValues();
+      for (var i = 1; i < users.length; i++) {
+        if (users[i][0] == data.targetUsername) {
+          userSheet.getRange(i + 1, 4).setValue("approved");
+          return response({ status: "success" });
+        }
+      }
+      return response({ status: "error", message: "Không tìm thấy người dùng." });
+    }
+
+    // 5. HÀNH ĐỘNG: CẬP NHẬT DANH SÁCH API KEY
+    if (action === "setApiKey") {
+      var settingsSheet = getOrCreateSheet(ss, "Settings", ["KeyName", "Value"]);
+      settingsSheet.clear();
+      settingsSheet.appendRow(["KeyName", "Value"]);
+      
+      var keys = data.apiKey.split(/[\n,]+/).map(function(k) { return k.trim(); }).filter(Boolean);
+      keys.forEach(function(key) {
+        settingsSheet.appendRow(["GEMINI_API_KEY", key]);
+      });
+      
+      return response({ status: "success", count: keys.length });
+    }
+
+    // 6. HÀNH ĐỘNG: LƯU KẾT QUẢ
+    if (action === "saveResult") {
+      var logSheet = getOrCreateSheet(ss, "WoodVisionLogs", ["Time", "User", "Original", "R1", "R2", "R3", "R4", "R5"]);
+      var folder = getOrCreateFolder("WoodVision_Assets");
+      
+      function saveImg(base64, name) {
+        if (!base64 || !base64.includes(",")) return "N/A";
+        var bytes = Utilities.base64Decode(base64.split(",")[1]);
+        var file = folder.createFile(Utilities.newBlob(bytes, "image/png", name + "_" + Date.now() + ".png"));
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        return file.getUrl();
+      }
+
+      var row = [new Date().toLocaleString(), data.username, saveImg(data.originalImage, "Root")];
+      data.results.forEach((res, i) => row.push(saveImg(res.url, "Mockup_" + (i+1))));
+      logSheet.appendRow(row);
+      return response({ status: "success" });
+    }
+
+  } catch (err) {
+    return response({ status: "error", message: err.toString() });
+  }
+}
+
+// Cải tiến cơ chế lấy Key: Quét tất cả các hàng và tách nhỏ nếu 1 ô chứa nhiều key
+function getApiKey(ss) {
+  var sheet = ss.getSheetByName("Settings");
+  if (!sheet) return "";
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return "";
+  
+  var allKeys = [];
+  for (var i = 1; i < data.length; i++) {
+    var cellContent = data[i][1].toString();
+    // Tách bằng xuống dòng hoặc dấu phẩy
+    var keys = cellContent.split(/[\n,]+/).map(function(k) { return k.trim(); }).filter(Boolean);
+    allKeys = allKeys.concat(keys);
+  }
+  
+  if (allKeys.length === 0) return "";
+  // Chọn ngẫu nhiên 1 key
+  var randomIndex = Math.floor(Math.random() * allKeys.length);
+  return allKeys[randomIndex];
+}
+
+function getOrCreateSheet(ss, name, headers) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    if (headers) sheet.appendRow(headers);
+  }
+  return sheet;
+}
+
+function getOrCreateFolder(name) {
+  var folders = DriveApp.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
+}
+
+function response(obj) {
+  var out = ContentService.createTextOutput(JSON.stringify(obj));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
+}

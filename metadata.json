@@ -1,0 +1,7 @@
+{
+  "name": "WoodVision AI - Nâng Tầm Thiết Kế Gỗ",
+  "description": "Ứng dụng AI chuyên sâu cho ngành gỗ, giúp chuyển đổi ảnh sản phẩm thô thành các bản thiết kế mockup thực tế với người sử dụng trong nhiều không gian sống động.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
