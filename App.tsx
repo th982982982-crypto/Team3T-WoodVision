@@ -29,10 +29,24 @@ const App: React.FC = () => {
     try {
       const res = await (authMode === 'login' ? loginUser(formData.user, formData.pass) : registerUser(formData.user, formData.pass));
       if (res.status === 'success') {
-        if (authMode === 'login') setState(prev => ({ ...prev, user: { username: formData.user, role: res.role } }));
-        else { alert(res.message); setAuthMode('login'); }
-      } else alert(res.message);
-    } catch (err) { alert("Lỗi kết nối Server."); }
+        if (authMode === 'login') {
+          // Gán API Key từ Backend vào môi trường runtime
+          if (res.apiKey) {
+            (window as any).process = (window as any).process || { env: {} };
+            (window as any).process.env = (window as any).process.env || {};
+            (window as any).process.env.API_KEY = res.apiKey;
+          }
+          setState(prev => ({ ...prev, user: { username: formData.user, role: res.role } }));
+        } else {
+          alert(res.message);
+          setAuthMode('login');
+        }
+      } else {
+        alert(res.message);
+      }
+    } catch (err) {
+      alert("Lỗi kết nối Server: " + err);
+    }
     setIsBusy(false);
   };
 
@@ -64,10 +78,12 @@ const App: React.FC = () => {
       const desc = await analyzeProductImage(state.originalImage);
       setState(prev => ({ ...prev, productDescription: desc, isAnalyzing: false, isGenerating: true, isGeneratingMetadata: true }));
 
+      // GIAI ĐOẠN 1: Tạo Master Design
       const masterUrl = await generateScene(state.originalImage, desc, 'full', 'Creating the definitive Master Architectural concept (40% soul preservation).', state.environment, true);
       const masterResult: GeneratedImage = { id: 'master', url: masterUrl, type: 'full', description: 'Bản thiết kế Master (Gốc kiến trúc)' };
       setState(prev => ({ ...prev, results: [masterResult] }));
 
+      // GIAI ĐOẠN 2: Dùng Master Design làm gốc cho 8 ảnh còn lại
       const tasks = [
         { type: 'full' as const, context: 'Toàn cảnh khác của công trình master này.' },
         { type: 'people' as const, context: 'Người sử dụng sản phẩm gỗ thật, quay nhiều góc cận cảnh.' },
@@ -103,10 +119,8 @@ const App: React.FC = () => {
     }
   };
 
-  // Hàm download tối ưu: Sử dụng Canvas để tải ảnh cross-origin mà không bị nhảy trang
   const downloadFinal = async (url: string, name: string) => {
     try {
-      // 1. Nếu là data URL (base64)
       if (url.startsWith('data:')) {
         const link = document.createElement('a');
         link.href = url;
@@ -117,7 +131,7 @@ const App: React.FC = () => {
         return;
       }
 
-      // 2. Thử fetch blob (Dành cho URL hỗ trợ CORS như lh3.googleusercontent.com)
+      // Xử lý tải ảnh từ URL ngoại vi (Google Drive proxy)
       const response = await fetch(url, { mode: 'cors' });
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -129,9 +143,7 @@ const App: React.FC = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      console.warn("Download failed with fetch, falling back to simple link", error);
-      // 3. Fallback: Mở trong tab mới nếu mọi cách khác thất bại (để người dùng nhấn chuột phải lưu)
-      // Nhưng không tự động chuyển tab hiện tại
+      // Fallback nếu CORS chặn fetch trực tiếp
       const link = document.createElement('a');
       link.href = url;
       link.download = `${name}.png`;
@@ -144,7 +156,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-amber-600 selection:text-black">
-      {/* MODAL CHI TIẾT */}
       {selectedResult && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
           <button onClick={() => { setSelectedResult(null); setRefineNote(''); }} className="absolute top-8 right-8 text-white/40 hover:text-white text-3xl transition-colors"><i className="fas fa-times"></i></button>
@@ -253,7 +264,7 @@ const App: React.FC = () => {
                         <div className="aspect-square rounded-[40px] overflow-hidden border border-white/10 bg-black group-hover:border-white/20 transition-all relative">
                           <img src={item.originalImage} crossOrigin="anonymous" className="w-full h-full object-contain" alt="Original" />
                           <button 
-                            onClick={(e) => { e.stopPropagation(); downloadFinal(item.originalImage, `Original-${item.sku}`); }}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); downloadFinal(item.originalImage, `Original-${item.sku}`); }}
                             className="absolute bottom-4 right-4 w-10 h-10 bg-black/60 backdrop-blur-md rounded-xl flex items-center justify-center text-amber-500 hover:bg-amber-600 hover:text-black transition-all shadow-xl"
                           >
                             <i className="fas fa-download"></i>
@@ -274,7 +285,7 @@ const App: React.FC = () => {
                               <img src={url} crossOrigin="anonymous" className="w-full h-full object-cover group-hover/img:scale-110 duration-500 transition-transform" alt="Res" />
                               <div className="absolute top-2 right-2 opacity-0 group-hover/img:opacity-100 transition-opacity z-20">
                                 <button 
-                                  onClick={(e) => { e.stopPropagation(); downloadFinal(url, `Archive-${item.sku}-${rIdx + 1}`); }} 
+                                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); downloadFinal(url, `Archive-${item.sku}-${rIdx + 1}`); }} 
                                   className="w-8 h-8 bg-black/60 backdrop-blur-md rounded-lg flex items-center justify-center text-white hover:bg-amber-600 hover:text-black transition-all shadow-lg"
                                   title="Tải ảnh xuống"
                                 >
@@ -319,8 +330,8 @@ const App: React.FC = () => {
                     <div className="space-y-6">
                       <label className="text-[10px] font-black uppercase text-white/40 px-2 tracking-widest">Environment Choice</label>
                       <div className="grid grid-cols-2 gap-4">
-                        <button onClick={() => setState({...state, environment: 'indoor'})} className={`py-4 rounded-3xl text-[10px] font-black uppercase transition-all border ${state.environment === 'indoor' ? 'bg-amber-600 text-black border-amber-600' : 'bg-white/5 border-white/10 text-white/40'}`}>Trong nhà</button>
-                        <button onClick={() => setState({...state, environment: 'outdoor'})} className={`py-4 rounded-3xl text-[10px] font-black uppercase transition-all border ${state.environment === 'outdoor' ? 'bg-amber-600 text-black border-amber-600' : 'bg-white/5 border-white/10 text-white/40'}`}>Ngoài trời</button>
+                        <button onClick={() => setState({...state, environment: 'indoor'})} className={`py-4 rounded-3xl text-[10px] font-black uppercase transition-all border ${state.environment === 'indoor' ? 'bg-amber-600 text-black border-amber-600 shadow-lg shadow-amber-600/10' : 'bg-white/5 border-white/10 text-white/40'}`}>Trong nhà</button>
+                        <button onClick={() => setState({...state, environment: 'outdoor'})} className={`py-4 rounded-3xl text-[10px] font-black uppercase transition-all border ${state.environment === 'outdoor' ? 'bg-amber-600 text-black border-amber-600 shadow-lg shadow-amber-600/10' : 'bg-white/5 border-white/10 text-white/40'}`}>Ngoài trời</button>
                       </div>
                     </div>
 
@@ -402,7 +413,7 @@ const App: React.FC = () => {
                               <span className="font-black text-[10px] uppercase text-white/20 tracking-[0.3em]">Design Phase</span>
                               <p className="text-[11px] font-bold text-white/60">Image 0{i+1}</p>
                             </div>
-                            <button onClick={e => { e.stopPropagation(); downloadFinal(res.url, `WoodVision-Design-${i+1}`); }} className="w-14 h-14 bg-white/5 hover:bg-amber-600 hover:text-black rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-lg"><i className="fas fa-arrow-down"></i></button>
+                            <button onClick={e => { e.stopPropagation(); e.preventDefault(); downloadFinal(res.url, `WoodVision-Design-${i+1}`); }} className="w-14 h-14 bg-white/5 hover:bg-amber-600 hover:text-black rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-lg"><i className="fas fa-arrow-down"></i></button>
                           </div>
                         </div>
                       ))}

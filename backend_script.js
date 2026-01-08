@@ -1,7 +1,7 @@
 
 /**
- * GOOGLE APPS SCRIPT BACKEND V20 - TEAM3T (WOODVISION)
- * HỖ TRỢ 9 KẾT QUẢ + HISTORY + SKU SEARCH
+ * GOOGLE APPS SCRIPT BACKEND V21 - TEAM3T (WOODVISION)
+ * CẬP NHẬT: TỐI ƯU HÓA LẤY KEY VÀ HISTORY LINKS
  */
 
 function doPost(e) {
@@ -15,10 +15,10 @@ function doPost(e) {
       var userSheet = getOrCreateSheet(ss, "Users", ["Username", "Password", "Role", "Status", "Created"]);
       var users = userSheet.getDataRange().getValues();
       for(var i=1; i<users.length; i++) {
-        if(users[i][0] == data.username) return response({ status: "error", message: "User exists" });
+        if(users[i][0] == data.username) return response({ status: "error", message: "Tài khoản đã tồn tại" });
       }
       userSheet.appendRow([data.username, data.password, "user", "pending", new Date()]);
-      return response({ status: "success", message: "Success! Wait for approval." });
+      return response({ status: "success", message: "Đăng ký thành công! Chờ Admin phê duyệt." });
     }
 
     if (action === "login") {
@@ -27,13 +27,13 @@ function doPost(e) {
       for (var i = 1; i < users.length; i++) {
         if (users[i][0] == data.username && users[i][1] == data.password) {
           if (users[i][2] !== "admin" && users[i][3] !== "approved") {
-            return response({ status: "pending", message: "Pending approval." });
+            return response({ status: "pending", message: "Tài khoản chưa được phê duyệt." });
           }
           var apiKey = getApiKey(ss);
           return response({ status: "success", role: users[i][2], apiKey: apiKey });
         }
       }
-      return response({ status: "error", message: "Wrong credentials" });
+      return response({ status: "error", message: "Sai tên đăng nhập hoặc mật khẩu" });
     }
 
     if (action === "saveResult") {
@@ -74,9 +74,9 @@ function doPost(e) {
       var rowIndex = parseInt(data.rowIndex);
       if (rowIndex && rowIndex > 1) {
         logSheet.getRange(rowIndex, 3).setValue(data.sku);
-        return response({ status: "success", message: "SKU Updated" });
+        return response({ status: "success", message: "SKU đã cập nhật" });
       }
-      return response({ status: "error", message: "Invalid row" });
+      return response({ status: "error", message: "Dòng không hợp lệ" });
     }
 
     if (action === "getHistory") {
@@ -86,7 +86,6 @@ function doPost(e) {
       
       function toStableLink(link) {
         if (!link || link === "N/A" || typeof link !== 'string') return "";
-        // Extracting ID strictly
         var match = link.match(/id=([a-zA-Z0-9_-]+)/);
         if (match && match[1]) return "https://lh3.googleusercontent.com/d/" + match[1];
         return link;
@@ -112,16 +111,6 @@ function doPost(e) {
       return response({ status: "success", history: history });
     }
 
-    if (action === "getUsers") {
-      var userSheet = getOrCreateSheet(ss, "Users");
-      var users = userSheet.getDataRange().getValues();
-      var userList = [];
-      for (var i = 1; i < users.length; i++) {
-        userList.push({ username: users[i][0], role: users[i][2], status: users[i][3] });
-      }
-      return response({ status: "success", users: userList });
-    }
-
     if (action === "setApiKey") {
       var settingsSheet = getOrCreateSheet(ss, "Settings", ["KeyName", "Value"]);
       settingsSheet.clear();
@@ -139,10 +128,14 @@ function getApiKey(ss) {
   if (!sheet) return "";
   var data = sheet.getDataRange().getValues();
   var allKeys = [];
+  // Bắt đầu từ hàng 2 để bỏ qua Header
   for (var i = 1; i < data.length; i++) {
-    var keys = data[i][1].toString().split(/[\n,]+/).map(function(k) { return k.trim(); }).filter(Boolean);
+    var cellValue = data[i][1].toString();
+    // Tách các key nếu chúng nằm chung 1 ô (phân cách bởi phẩy hoặc xuống hàng)
+    var keys = cellValue.split(/[\n,\r\s,]+/).map(function(k) { return k.trim(); }).filter(Boolean);
     allKeys = allKeys.concat(keys);
   }
+  // Chọn 1 key ngẫu nhiên để xoay tua
   return allKeys.length ? allKeys[Math.floor(Math.random() * allKeys.length)] : "";
 }
 

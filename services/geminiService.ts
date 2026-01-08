@@ -1,8 +1,14 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
+const getAIClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API Key chưa được cấu hình. Vui lòng đăng nhập lại.");
+  return new GoogleGenAI({ apiKey });
+};
+
 export const analyzeProductImage = async (base64Image: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAIClient();
   const prompt = `Analyze this wooden product carefully. Identify wood species, grain, and construction style. Focus on technical materials and structural essence.`;
   try {
     const response = await ai.models.generateContent({
@@ -16,7 +22,7 @@ export const analyzeProductImage = async (base64Image: string): Promise<string> 
 };
 
 export const generateEtsyMetadata = async (description: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAIClient();
   const prompt = `Based on: "${description}", create professional Etsy SEO content.
   1. Title: High-converting SEO title.
   2. Description: MUST be in a SINGLE VERTICAL COLUMN format from top to bottom.
@@ -63,15 +69,13 @@ export const generateScene = async (
   isInitialRedesign: boolean = false,
   refineNote?: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAIClient();
   const lighting = environment === 'outdoor' ? "Realistic natural outdoor sunlight, authentic daylight shadows, crisp textures, high-end photography" : "Soft realistic indoor ambient light, natural room atmosphere, elegant shadows";
   
   let taskPrompt = "";
   if (isInitialRedesign) {
-    // Bước 1: Giữ 40%, tạo diện mạo 60% mới hoàn toàn khác biệt
     taskPrompt = `TASK: REDESIGN this wooden product. Keep only 40% of the original structural essence (the soul), but create a COMPLETELY NEW, DISTINCT, and SUPERIOR architecture. It MUST look noticeably different from the original image while maintaining high quality. SCENE: Cinematic architectural shot, ${lighting}.`;
   } else {
-    // Bước 2: Dùng Master Design làm gốc, giữ nguyên 100% kiến trúc
     if (type === 'full') {
       taskPrompt = `TASK: Alternative perspective of THIS EXACT architecture from the reference image. DO NOT change any structural detail. SCENE: Professional photography, ${lighting}.`;
     } else if (type === 'people') {
