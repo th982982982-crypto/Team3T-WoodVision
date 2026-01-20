@@ -75,19 +75,19 @@ const App: React.FC = () => {
       const desc = await analyzeProductImage(state.originalImage);
       setState(prev => ({ ...prev, productDescription: desc, isAnalyzing: false, isGenerating: true, isGeneratingMetadata: true }));
 
-      const masterUrl = await generateScene(state.originalImage, desc, 'full', 'Creating the definitive Master Architectural concept (40% soul preservation).', state.environment, true);
-      const masterResult: GeneratedImage = { id: 'master', url: masterUrl, type: 'full', description: 'Bản thiết kế Master (Gốc kiến trúc)' };
+      const masterUrl = await generateScene(state.originalImage, desc, 'full', 'Creating the definitive Master Architectural concept.', state.environment, true);
+      const masterResult: GeneratedImage = { id: 'master', url: masterUrl, type: 'full', description: 'Bản thiết kế Master (Giữ 80% hồn)' };
       setState(prev => ({ ...prev, results: [masterResult] }));
 
       const tasks = [
-        { type: 'full' as const, context: 'Toàn cảnh khác của công trình master này.' },
-        { type: 'people' as const, context: 'Người sử dụng sản phẩm gỗ thật, quay nhiều góc cận cảnh.' },
-        { type: 'people' as const, context: 'Lifestyle scene, người tương tác trong không gian gỗ.' },
-        { type: 'people' as const, context: 'Cận cảnh chi tiết thớ gỗ và tay người chạm vào.' },
-        { type: 'construction' as const, context: 'Chi tiết khớp nối gỗ và khung sườn đang lắp ráp.' },
-        { type: 'construction' as const, context: 'Công nhân đang thi công lắp đặt tại chỗ thiết kế này.' },
-        { type: 'construction' as const, context: 'Cấu trúc khung kỹ thuật bên trong thớ gỗ.' },
-        { type: 'construction' as const, context: 'Quá trình hoàn thiện bề mặt gỗ tại bối cảnh thực.' }
+        { type: 'full' as const, context: 'Góc nhìn toàn cảnh khác của thiết kế này.' },
+        { type: 'people' as const, context: 'Sản phẩm trong bối cảnh đời thực với người dùng.' },
+        { type: 'people' as const, context: 'Tương tác gần gũi với sản phẩm gỗ.' },
+        { type: 'people' as const, context: 'Cận cảnh chi tiết thớ gỗ và tay người.' },
+        { type: 'construction' as const, context: 'Chi tiết khớp nối gỗ kỹ thuật.' },
+        { type: 'construction' as const, context: 'Quá trình thi công hoàn thiện.' },
+        { type: 'construction' as const, context: 'Cấu trúc khung gỗ bên trong.' },
+        { type: 'construction' as const, context: 'Lắp ráp tại bối cảnh thực tế.' }
       ];
 
       const currentResults: GeneratedImage[] = [masterResult];
@@ -96,7 +96,7 @@ const App: React.FC = () => {
           const url = await generateScene(masterUrl, desc, tasks[i].type, tasks[i].context, state.environment, false);
           currentResults.push({ id: `r-${i}`, url, type: tasks[i].type, description: tasks[i].context });
           setState(prev => ({ ...prev, results: [...currentResults] }));
-        } catch (e) { console.error("Error generating reference part", i); }
+        } catch (e) { console.error("Error generating part", i); }
       }
 
       const finalMeta = await generateEtsyMetadata(desc);
@@ -147,7 +147,7 @@ const App: React.FC = () => {
       }
     }));
     setLastSavedRowIndex(item.rowIndex);
-    setShowHistory(false); // Quay lại giao diện Design
+    setShowHistory(false);
   };
 
   const downloadFinal = async (url: string, name: string) => {
@@ -184,7 +184,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-amber-600 selection:text-black">
-      {/* MODAL CHI TIẾT */}
       {selectedResult && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
           <button onClick={() => { setSelectedResult(null); setRefineNote(''); }} className="absolute top-8 right-8 text-white/40 hover:text-white text-3xl transition-colors"><i className="fas fa-times"></i></button>
@@ -262,7 +261,6 @@ const App: React.FC = () => {
         <>
           <header className="p-6 bg-black/80 backdrop-blur-2xl border-b border-white/5 flex justify-between items-center sticky top-0 z-50">
             <div className="flex items-center gap-6">
-              {/* Logo Icon làm nút Home - Tự refresh để bắt đầu thiết kế mới */}
               <div 
                 onClick={handleHomeClick}
                 className="w-12 h-12 bg-amber-600 rounded-2xl flex items-center justify-center shadow-lg text-black cursor-pointer hover:scale-105 transition-all"
@@ -295,7 +293,6 @@ const App: React.FC = () => {
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-10">
                   <div className="flex items-center gap-6">
                     <h2 className="text-6xl font-serif font-bold">Archives <span className="text-amber-600">.</span></h2>
-                    {/* Nút refresh lịch sử (refes) */}
                     <button 
                       onClick={loadHistory} 
                       disabled={isHistoryLoading}
@@ -325,7 +322,6 @@ const App: React.FC = () => {
                         <div className="px-4">
                           <div className="flex items-center justify-between mb-2">
                              <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">SKU: {item.sku}</span>
-                             {/* Bấm vào mẫu thiết kế để quay lại Design cập nhật SKU */}
                              <button 
                                onClick={() => handleSelectFromHistory(item)}
                                className="px-4 py-2 bg-amber-600/10 hover:bg-amber-600 text-amber-500 hover:text-black rounded-full text-[9px] font-black uppercase transition-all"
